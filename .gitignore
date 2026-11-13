@@ -11,4 +11,6 @@ __pycache__/
 *.key
 *credentials*
 *secret*
-访问凭据*
+*凭据*
+id_rsa*
+id_ed25519*

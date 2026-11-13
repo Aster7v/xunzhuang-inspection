@@ -1,5 +1,6 @@
 """FishBot telemetry gateway: MQTT -> SQLite -> read-only HTTP API + frontend."""
 import io
+from contextlib import closing
 import hmac
 import json
 import os
@@ -49,7 +50,7 @@ def record_message(topic, body, forwarded=False):
     except (UnicodeError, ValueError, TypeError):
         return False
     now = int(time.time())
-    with connect_db() as db:
+    with closing(connect_db()) as db, db:
         db.execute('INSERT INTO readings(received_at,topic,payload) VALUES(?,?,?)', (now, topic, encoded))
         db.execute('DELETE FROM readings WHERE id NOT IN (SELECT id FROM readings ORDER BY id DESC LIMIT 5000)')
     with lock:
@@ -116,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
                 snapshot.update(mqtt_configured=True, last_error='网关超时或离线，等待重新连接')
             self.respond(200, json.dumps(snapshot, ensure_ascii=False).encode())
         elif path == '/api/readings':
-            with connect_db() as db:
+            with closing(connect_db()) as db, db:
                 rows = db.execute('SELECT received_at, topic, payload FROM readings ORDER BY id DESC LIMIT 30').fetchall()
             data = [{'received_at': t, 'topic': topic, 'payload': json.loads(payload)} for t, topic, payload in rows]
             self.respond(200, json.dumps(data, ensure_ascii=False).encode())
@@ -157,7 +158,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 def main():
-    with connect_db():
+    with closing(connect_db()):
         pass
     client = start_mqtt()
     host = os.environ.get('HTTP_HOST', '127.0.0.1')
